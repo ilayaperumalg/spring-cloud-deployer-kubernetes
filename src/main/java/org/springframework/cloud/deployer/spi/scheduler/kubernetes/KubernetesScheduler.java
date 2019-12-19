@@ -24,8 +24,8 @@ import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.LocalObjectReference;
+import io.fabric8.kubernetes.api.model.PodSpec;
 import io.fabric8.kubernetes.api.model.StatusCause;
 import io.fabric8.kubernetes.api.model.batch.CronJob;
 import io.fabric8.kubernetes.api.model.batch.CronJobBuilder;
@@ -33,6 +33,9 @@ import io.fabric8.kubernetes.api.model.batch.CronJobList;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 
+import org.springframework.cloud.deployer.spi.kubernetes.AbstractKubernetesDeployer;
+import org.springframework.cloud.deployer.spi.kubernetes.DefaultContainerFactory;
+import org.springframework.cloud.deployer.spi.kubernetes.support.DeploymentPropertiesResolver;
 import org.springframework.cloud.deployer.spi.scheduler.CreateScheduleException;
 import org.springframework.cloud.deployer.spi.scheduler.ScheduleInfo;
 import org.springframework.cloud.deployer.spi.scheduler.ScheduleRequest;
@@ -49,22 +52,20 @@ import org.springframework.util.StringUtils;
  * @author Chris Schaefer
  * @author Ilayaperumal Gopinathan
  */
-public class KubernetesScheduler implements Scheduler {
+public class KubernetesScheduler extends AbstractKubernetesDeployer implements Scheduler {
 	private static final String SPRING_CRONJOB_ID_KEY = "spring-cronjob-id";
 
 	private static final String SCHEDULE_EXPRESSION_FIELD_NAME = "spec.schedule";
 
-	private final KubernetesClient kubernetesClient;
+	public KubernetesScheduler(KubernetesClient client,
+			KubernetesSchedulerProperties properties) {
+		Assert.notNull(client, "KubernetesClient must not be null");
+		Assert.notNull(properties, "KubernetesSchedulerProperties must not be null");
 
-	private final KubernetesSchedulerProperties kubernetesSchedulerProperties;
-
-	public KubernetesScheduler(KubernetesClient kubernetesClient,
-			KubernetesSchedulerProperties kubernetesSchedulerProperties) {
-		Assert.notNull(kubernetesClient, "KubernetesClient must not be null");
-		Assert.notNull(kubernetesSchedulerProperties, "KubernetesSchedulerProperties must not be null");
-
-		this.kubernetesClient = kubernetesClient;
-		this.kubernetesSchedulerProperties = kubernetesSchedulerProperties;
+		this.client = client;
+		this.properties = properties;
+		this.containerFactory = new DefaultContainerFactory(properties);
+		this.deploymentPropertiesResolver = new DeploymentPropertiesResolver("spring.cloud.scheduler.", properties);
 	}
 
 	@Override
@@ -98,7 +99,7 @@ public class KubernetesScheduler implements Scheduler {
 
 	@Override
 	public void unschedule(String scheduleName) {
-		boolean unscheduled = this.kubernetesClient.batch().cronjobs().withName(scheduleName).delete();
+		boolean unscheduled = this.client.batch().cronjobs().withName(scheduleName).delete();
 
 		if (!unscheduled) {
 			throw new SchedulerException("Failed to unschedule schedule " + scheduleName + " does not exist.");
@@ -115,7 +116,7 @@ public class KubernetesScheduler implements Scheduler {
 
 	@Override
 	public List<ScheduleInfo> list() {
-		CronJobList cronJobList = this.kubernetesClient.batch().cronjobs().list();
+		CronJobList cronJobList = this.client.batch().cronjobs().list();
 
 		List<CronJob> cronJobs = cronJobList.getItems();
 		List<ScheduleInfo> scheduleInfos = new ArrayList<>();
@@ -142,35 +143,36 @@ public class KubernetesScheduler implements Scheduler {
 		Map<String, String> labels = Collections.singletonMap(SPRING_CRONJOB_ID_KEY,
 				scheduleRequest.getDefinition().getName());
 
-		String schedule = scheduleRequest.getSchedulerProperties().get(SchedulerPropertyKeys.CRON_EXPRESSION);
+		Map<String, String> schedulerProperties = scheduleRequest.getSchedulerProperties();
+		String schedule = schedulerProperties.get(SchedulerPropertyKeys.CRON_EXPRESSION);
 		Assert.hasText(schedule, "The property: " + SchedulerPropertyKeys.CRON_EXPRESSION + " must be defined");
 
-		Container container = new ContainerCreator(this.kubernetesSchedulerProperties, scheduleRequest).build();
-
-		String taskServiceAccountName = KubernetesSchedulerPropertyResolver.getTaskServiceAccountName(scheduleRequest,
-				this.kubernetesSchedulerProperties);
-
-		String restartPolicy = this.kubernetesSchedulerProperties.getRestartPolicy().name();
+		RestartPolicy restartPolicy = this.deploymentPropertiesResolver.getRestartPolicy(scheduleRequest.getSchedulerProperties());
+		PodSpec podSpec = createPodSpec(scheduleRequest.getScheduleName(), scheduleRequest, null,
+				(restartPolicy.equals(RestartPolicy.Never)) ? true : false);
+		String taskServiceAccountName = this.deploymentPropertiesResolver.getTaskServiceAccountName(scheduleRequest.getSchedulerProperties());
+		if (StringUtils.hasText(taskServiceAccountName)) {
+			podSpec.setServiceAccountName(taskServiceAccountName);
+		}
 
 		CronJob cronJob = new CronJobBuilder().withNewMetadata().withName(scheduleRequest.getScheduleName())
 				.withLabels(labels).endMetadata().withNewSpec().withSchedule(schedule).withNewJobTemplate()
-				.withNewSpec().withNewTemplate().withNewSpec().withServiceAccountName(taskServiceAccountName)
-				.withContainers(container).withRestartPolicy(restartPolicy).endSpec().endTemplate().endSpec()
+				.withNewSpec().withNewTemplate().withSpec(podSpec).endTemplate().endSpec()
 				.endJobTemplate().endSpec().build();
 
 		setImagePullSecret(scheduleRequest, cronJob);
 
-		return this.kubernetesClient.batch().cronjobs().create(cronJob);
+		return this.client.batch().cronjobs().create(cronJob);
 	}
 
-	protected String getExceptionMessageForField(KubernetesClientException kubernetesClientException,
+	protected String getExceptionMessageForField(KubernetesClientException clientException,
 			String fieldName) {
-		List<StatusCause> statusCauses = kubernetesClientException.getStatus().getDetails().getCauses();
+		List<StatusCause> statusCauses = clientException.getStatus().getDetails().getCauses();
 
 		if (!CollectionUtils.isEmpty(statusCauses)) {
 			for (StatusCause statusCause : statusCauses) {
 				if (fieldName.equals(statusCause.getField())) {
-					return kubernetesClientException.getStatus().getMessage();
+					return clientException.getStatus().getMessage();
 				}
 			}
 		}
@@ -180,7 +182,7 @@ public class KubernetesScheduler implements Scheduler {
 
 	private void setImagePullSecret(ScheduleRequest scheduleRequest, CronJob cronJob) {
 		String imagePullSecret = KubernetesSchedulerPropertyResolver.getImagePullSecret(scheduleRequest,
-				this.kubernetesSchedulerProperties);
+				(KubernetesSchedulerProperties) this.properties);
 
 		if (StringUtils.hasText(imagePullSecret)) {
 			LocalObjectReference localObjectReference = new LocalObjectReference();

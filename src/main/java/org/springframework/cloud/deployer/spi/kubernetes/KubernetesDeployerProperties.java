@@ -28,6 +28,7 @@ import io.fabric8.kubernetes.api.model.VolumeMount;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
+import org.springframework.cloud.deployer.spi.scheduler.kubernetes.KubernetesSchedulerProperties;
 
 /**
  * @author Florian Rosenberg
@@ -333,6 +334,12 @@ public class KubernetesDeployerProperties {
 			this.commands = commands;
 		}
 	}
+
+
+	/**
+	 * Name of the environment variable that can define the Kubernetes namespace to use.
+	 */
+	public static final String ENV_KEY_KUBERNETES_NAMESPACE = "KUBERNETES_NAMESPACE";
 
 	private static String KUBERNETES_NAMESPACE = System.getenv("KUBERNETES_NAMESPACE");
 

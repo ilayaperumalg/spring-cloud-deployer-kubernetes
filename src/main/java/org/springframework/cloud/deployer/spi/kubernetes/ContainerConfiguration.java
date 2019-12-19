@@ -23,6 +23,7 @@ import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
  * Encapsulates parameters used to configure a container.
  *
  * @author Chris Schaefer
+ * @author Ilayaperumal Gopinathan
  */
 public class ContainerConfiguration {
 	private String appId;

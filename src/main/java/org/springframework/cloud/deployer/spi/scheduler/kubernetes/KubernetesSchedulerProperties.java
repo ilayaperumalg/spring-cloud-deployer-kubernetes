@@ -17,8 +17,7 @@
 package org.springframework.cloud.deployer.spi.scheduler.kubernetes;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.cloud.deployer.spi.kubernetes.EntryPointStyle;
-import org.springframework.cloud.deployer.spi.kubernetes.ImagePullPolicy;
+import org.springframework.cloud.deployer.spi.kubernetes.KubernetesDeployerProperties;
 import org.springframework.util.StringUtils;
 
 /**
@@ -27,62 +26,20 @@ import org.springframework.util.StringUtils;
  * @author Chris Schaefer
  */
 @ConfigurationProperties(prefix = KubernetesSchedulerProperties.KUBERNETES_SCHEDULER_PROPERTIES)
-public class KubernetesSchedulerProperties {
+public class KubernetesSchedulerProperties extends KubernetesDeployerProperties {
 	/**
 	 * Namespace to use for Kubernetes Scheduler properties.
 	 */
 	public static final String KUBERNETES_SCHEDULER_PROPERTIES = "spring.cloud.scheduler.kubernetes";
 
-	/**
-	 * The "default" Kubernetes namespace.
-	 */
-	private static final String DEFAULT_KUBERNETES_NAMESPACE = "default";
+	public static final String RESTART_POLICY_KEY = "restartPolicy";
 
-	/**
-	 * Name of the environment variable that can define the Kubernetes namespace to use.
-	 */
-	protected static final String ENV_KEY_KUBERNETES_NAMESPACE = "KUBERNETES_NAMESPACE";
-
-	/**
-	 * The Kubernetes namespace obtained from the environment variable
-	 * {@link KubernetesSchedulerProperties#ENV_KEY_KUBERNETES_NAMESPACE} if any.
-	 */
-	private static final String ENV_KUBERNETES_NAMESPACE = System.getenv(ENV_KEY_KUBERNETES_NAMESPACE);
-
-	/**
-	 * The Kubernetes namespace to use. First check the environment value of
-	 * {@link KubernetesSchedulerProperties#ENV_KUBERNETES_NAMESPACE}, if not present, use
-	 * {@link KubernetesSchedulerProperties#DEFAULT_KUBERNETES_NAMESPACE}.
-	 */
-	private static String KUBERNETES_NAMESPACE = StringUtils.hasText(ENV_KUBERNETES_NAMESPACE)
-			? ENV_KUBERNETES_NAMESPACE
-			: DEFAULT_KUBERNETES_NAMESPACE;
-
-	/**
-	 * The {@link ImagePullPolicy} to use. Defaults to {@link ImagePullPolicy#IfNotPresent}.
-	 */
-	private ImagePullPolicy imagePullPolicy = ImagePullPolicy.IfNotPresent;
+	public static final String TASK_SERVICE_ACCOUNT_NAME_KEY = "taskServiceAccountName";
 
 	/**
 	 * The {@link RestartPolicy} to use. Defaults to {@link RestartPolicy#Never}.
 	 */
 	private RestartPolicy restartPolicy = RestartPolicy.Never;
-
-	/**
-	 * The {@link EntryPointStyle} to use. Defaults to {@link EntryPointStyle#exec}.
-	 */
-	private EntryPointStyle entryPointStyle = EntryPointStyle.exec;
-
-	/**
-	 * The Kubernetes namespace to use. Defaults to
-	 * {@link KubernetesSchedulerProperties#KUBERNETES_NAMESPACE}.
-	 */
-	private String namespace = KUBERNETES_NAMESPACE;
-
-	/**
-	 * The Secret name to use when pulling a private docker image.
-	 */
-	private String imagePullSecret;
 
 	/**
 	 * The default service account name to use for tasks.
@@ -94,30 +51,6 @@ public class KubernetesSchedulerProperties {
 	 * {@link KubernetesSchedulerProperties#DEFAULT_TASK_SERVICE_ACCOUNT_NAME}
 	 */
 	private String taskServiceAccountName = DEFAULT_TASK_SERVICE_ACCOUNT_NAME;
-
-	/**
-	 * Environment variables to set on all tasks.
-	 */
-	private String[] environmentVariables = new String[] {};
-
-	/**
-	 * Obtains the {@link ImagePullPolicy} to use. Defaults to
-	 * {@link KubernetesSchedulerProperties#imagePullPolicy}.
-	 *
-	 * @return the {@link ImagePullPolicy} to use
-	 */
-	public ImagePullPolicy getImagePullPolicy() {
-		return imagePullPolicy;
-	}
-
-	/**
-	 * Sets the {@link ImagePullPolicy} to use.
-	 *
-	 * @param imagePullPolicy the {@link ImagePullPolicy} to use
-	 */
-	public void setImagePullPolicy(ImagePullPolicy imagePullPolicy) {
-		this.imagePullPolicy = imagePullPolicy;
-	}
 
 	/**
 	 * Obtains the {@link RestartPolicy} to use. Defaults to
@@ -139,62 +72,6 @@ public class KubernetesSchedulerProperties {
 	}
 
 	/**
-	 * Obtains the {@link EntryPointStyle} to use. Defaults to
-	 * {@link KubernetesSchedulerProperties#entryPointStyle}.
-	 *
-	 * @return the {@link EntryPointStyle} to use
-	 */
-	public EntryPointStyle getEntryPointStyle() {
-		return entryPointStyle;
-	}
-
-	/**
-	 * Sets the {@link EntryPointStyle} to use.
-	 *
-	 * @param entryPointStyle the {@link EntryPointStyle} to use
-	 */
-	public void setEntryPointStyle(EntryPointStyle entryPointStyle) {
-		this.entryPointStyle = entryPointStyle;
-	}
-
-	/**
-	 * Obtains the Kubernetes namespace to use. Defaults to
-	 * {@link KubernetesSchedulerProperties#namespace}.
-	 *
-	 * @return the Kubernetes namespace to use
-	 */
-	public String getNamespace() {
-		return namespace;
-	}
-
-	/**
-	 * Sets the Kubernetes namespace to use.
-	 *
-	 * @param namespace the Kubernetes namespace to use
-	 */
-	public void setNamespace(String namespace) {
-		this.namespace = namespace;
-	}
-
-	/**
-	 * Obtains the name of the Secret to use when pulling images.
-	 *
-	 * @return the name of the Secret
-	 */
-	public String getImagePullSecret() {
-		return imagePullSecret;
-	}
-
-	/**
-	 * Sets the name of the Secret to use when pulling images.
-	 *
-	 * @param imagePullSecret the Secret name
-	 */
-	public void setImagePullSecret(String imagePullSecret) {
-		this.imagePullSecret = imagePullSecret;
-	}
-
-	/**
 	 * Obtains the service account name to use for tasks.
 	 *
 	 * @return the service account name
@@ -210,23 +87,5 @@ public class KubernetesSchedulerProperties {
 	 */
 	public void setTaskServiceAccountName(String taskServiceAccountName) {
 		this.taskServiceAccountName = taskServiceAccountName;
-	}
-
-	/**
-	 * Obtains the environment variables set on all tasks.
-	 *
-	 * @return the environment variables
-	 */
-	public String[] getEnvironmentVariables() {
-		return environmentVariables;
-	}
-
-	/**
-	 * Sets the environment variables to use on all tasks.
-	 *
-	 * @param environmentVariables the environment variables to set
-	 */
-	public void setEnvironmentVariables(String[] environmentVariables) {
-		this.environmentVariables = environmentVariables;
 	}
 }

@@ -64,10 +64,8 @@ import org.springframework.cloud.deployer.spi.app.AppStatus;
 import org.springframework.cloud.deployer.spi.app.DeploymentState;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.deployer.spi.core.RuntimeEnvironmentInfo;
-import org.springframework.util.Assert;
+import org.springframework.cloud.deployer.spi.kubernetes.support.DeploymentPropertiesResolver;
 import org.springframework.util.StringUtils;
-
-import static java.lang.String.format;
 
 /**
  * A deployer that targets Kubernetes.
@@ -85,7 +83,6 @@ import static java.lang.String.format;
 public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements AppDeployer {
 
 	private static final String SERVER_PORT_KEY = "server.port";
-	protected static final String STATEFUL_SET_IMAGE_NAME = "busybox";
 
 	protected final Log logger = LogFactory.getLog(getClass().getName());
 
@@ -100,6 +97,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 		this.properties = properties;
 		this.client = client;
 		this.containerFactory = containerFactory;
+		this.deploymentPropertiesResolver = new DeploymentPropertiesResolver("spring.cloud.deployer.", properties);
 	}
 
 	@Override
@@ -296,8 +294,10 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 
 		int replicas = getCountFromRequest(request);
 
-		Map<String, String> annotations = getPodAnnotations(request);
-		Map<String, String> deploymentLabels = getDeploymentLabels(request);
+		Map<String, String> kubernetesDeployerProperties = request.getDeploymentProperties();
+
+		Map<String, String> annotations = this.deploymentPropertiesResolver.getPodAnnotations(kubernetesDeployerProperties);
+		Map<String, String> deploymentLabels = this.deploymentPropertiesResolver.getDeploymentLabels(kubernetesDeployerProperties);
 
 		PodSpec podSpec = createPodSpec(appId, request, externalPort, false);
 
@@ -328,12 +328,14 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 											int externalPort) {
 		int replicas = getCountFromRequest(request);
 
+		Map<String, String> kubernetesDeployerProperties = request.getDeploymentProperties();
+
 		logger.debug(String.format("Creating StatefulSet: %s on %d with %d replicas", appId, externalPort, replicas));
 
 		Map<String, Quantity> storageResource = Collections.singletonMap("storage",
-				new Quantity(getStatefulSetStorage(request)));
+				new Quantity(this.deploymentPropertiesResolver.getStatefulSetStorage(kubernetesDeployerProperties)));
 
-		String storageClassName = getStatefulSetStorageClassName(request);
+		String storageClassName = this.deploymentPropertiesResolver.getStatefulSetStorageClassName(kubernetesDeployerProperties);
 
 		PersistentVolumeClaimBuilder persistentVolumeClaimBuilder = new PersistentVolumeClaimBuilder().withNewSpec().
 				withStorageClassName(storageClassName).withAccessModes(Collections.singletonList("ReadWriteOnce"))
@@ -348,7 +350,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 		podSpec.getContainers().get(0).getVolumeMounts()
 			.add(new VolumeMountBuilder().withName("config").withMountPath("/config").build());
 
-		String statefulSetInitContainerImageName = getStatefulSetInitContainerImageName(request, properties);
+		String statefulSetInitContainerImageName = this.deploymentPropertiesResolver.getStatefulSetInitContainerImageName(kubernetesDeployerProperties);
 
 		podSpec.getInitContainers().add(createStatefulSetInitContainer(statefulSetInitContainerImageName));
 
@@ -369,11 +371,11 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 		int externalPort) {
 		ServiceSpecBuilder spec = new ServiceSpecBuilder();
 		boolean isCreateLoadBalancer = false;
-		String createLoadBalancer = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
+		String createLoadBalancer = DeploymentPropertiesResolver.getPropertyValue(request.getDeploymentProperties(),
 			"spring.cloud.deployer.kubernetes.createLoadBalancer");
-		String createNodePort = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
+		String createNodePort = DeploymentPropertiesResolver.getPropertyValue(request.getDeploymentProperties(),
 			"spring.cloud.deployer.kubernetes.createNodePort");
-		String additionalServicePorts = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
+		String additionalServicePorts = DeploymentPropertiesResolver.getPropertyValue(request.getDeploymentProperties(),
 				"spring.cloud.deployer.kubernetes.servicePorts");
 
 		if (createLoadBalancer != null && createNodePort != null) {
@@ -420,7 +422,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 
 		spec.withSelector(idMap).addAllToPorts(servicePorts);
 
-		Map<String, String> annotations = getServiceAnnotations(request);
+		Map<String, String> annotations = this.deploymentPropertiesResolver.getServiceAnnotations(request.getDeploymentProperties());
 
 		client.services().createNew().withNewMetadata().withName(appId)
 			.withLabels(idMap).withAnnotations(annotations).addToLabels(SPRING_MARKER_KEY, SPRING_MARKER_VALUE)
@@ -441,46 +443,6 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 		}
 
 		return ports;
-	}
-
-	private Map<String, String> getPodAnnotations(AppDeploymentRequest request) {
-		String annotationsValue = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
-				"spring.cloud.deployer.kubernetes.podAnnotations", "");
-		if (StringUtils.isEmpty(annotationsValue)) {
-			annotationsValue = properties.getPodAnnotations();
-		}
-		return PropertyParserUtils.getAnnotations(annotationsValue);
-	}
-
-	private Map<String, String> getServiceAnnotations(AppDeploymentRequest request) {
-		String annotationsProperty = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
-				"spring.cloud.deployer.kubernetes.serviceAnnotations", "");
-
-		if (StringUtils.isEmpty(annotationsProperty)) {
-			annotationsProperty = properties.getServiceAnnotations();
-		}
-
-		return PropertyParserUtils.getAnnotations(annotationsProperty);
-	}
-
-	protected Map<String, String> getDeploymentLabels(AppDeploymentRequest request) {
-		Map<String, String> labels = new HashMap<>();
-
-		String deploymentLabels = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
-				"spring.cloud.deployer.kubernetes.deploymentLabels", "");
-
-		if (StringUtils.hasText(deploymentLabels)) {
-			String[] deploymentLabel = deploymentLabels.split(",");
-
-			for (String label : deploymentLabel) {
-				String[] labelPair = label.split(":");
-				Assert.isTrue(labelPair.length == 2,
-						format("Invalid label format, expected 'labelKey:labelValue', got: '%s'", labelPair));
-				labels.put(labelPair[0].trim(), labelPair[1].trim());
-			}
-		}
-
-		return labels;
 	}
 
 	/**
@@ -588,23 +550,5 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 			boolean pvcsDeleted = pvcsToDelete.delete();
 			logger.debug(String.format("PVC deleted for: %s - %b", labels, pvcsDeleted));
 		}
-	}
-
-	private String getStatefulSetInitContainerImageName(AppDeploymentRequest request, KubernetesDeployerProperties
-														  kubernetesDeployerProperties) {
-		String statefulSetInitContainerImageName = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
-				"spring.cloud.deployer.kubernetes.statefulSetInitContainerImageName", "");
-
-		if (StringUtils.hasText(statefulSetInitContainerImageName)) {
-			return statefulSetInitContainerImageName;
-		}
-
-		statefulSetInitContainerImageName = kubernetesDeployerProperties.getStatefulSetInitContainerImageName();
-
-		if (StringUtils.hasText(statefulSetInitContainerImageName)) {
-			return statefulSetInitContainerImageName;
-		}
-
-		return STATEFUL_SET_IMAGE_NAME;
 	}
 }

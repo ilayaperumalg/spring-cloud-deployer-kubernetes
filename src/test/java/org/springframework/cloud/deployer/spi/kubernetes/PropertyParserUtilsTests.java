@@ -24,6 +24,8 @@ import java.util.Map;
 
 import org.junit.Test;
 
+import org.springframework.cloud.deployer.spi.kubernetes.support.PropertyParserUtils;
+
 /**
  * Tests for PropertyParserUtils
  *
