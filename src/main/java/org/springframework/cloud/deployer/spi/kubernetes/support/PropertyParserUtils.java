@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-package org.springframework.cloud.deployer.spi.kubernetes;
+package org.springframework.cloud.deployer.spi.kubernetes.support;
 
+import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.cloud.deployer.spi.kubernetes.KubernetesDeployerProperties;
 import org.springframework.cloud.deployer.spi.kubernetes.support.RelaxedNames;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.core.io.ByteArrayResource;
@@ -39,14 +41,14 @@ import static java.lang.String.format;
  * @author Chris Schaefer
  * @author Ilayaperumal Gopinathan
  */
-class PropertyParserUtils {
+public class PropertyParserUtils {
 	/**
 	 * Extracts annotations from the provided value
 	 *
 	 * @param annotation The deployment request annotations
 	 * @return {@link Map} of annotations
 	 */
-	static Map<String, String> getAnnotations(String annotation) {
+	public static Map<String, String> getAnnotations(String annotation) {
 		Map<String, String> annotations = new HashMap<>();
 
 		if (StringUtils.hasText(annotation)) {
@@ -69,7 +71,7 @@ class PropertyParserUtils {
 	 * @param yamlLabel the label representing the field to bind to
 	 * @return a {@link KubernetesDeployerProperties} with the bound property data
 	 */
-	static KubernetesDeployerProperties bindProperties(AppDeploymentRequest request, String propertyKey, String yamlLabel) {
+	public static KubernetesDeployerProperties bindProperties(AppDeploymentRequest request, String propertyKey, String yamlLabel) {
 		String deploymentPropertyValue = request.getDeploymentProperties().getOrDefault(propertyKey, "");
 
 		KubernetesDeployerProperties deployerProperties = new KubernetesDeployerProperties();
@@ -92,11 +94,11 @@ class PropertyParserUtils {
 		return deployerProperties;
 	}
 
-	static String getDeploymentPropertyValue(Map<String, String> deploymentProperties, String propertyName) {
+	public static String getDeploymentPropertyValue(Map<String, String> deploymentProperties, String propertyName) {
 		return getDeploymentPropertyValue(deploymentProperties, propertyName, null);
 	}
 
-	static String getDeploymentPropertyValue(Map<String, String> deploymentProperties, String propertyName,
+	public static String getDeploymentPropertyValue(Map<String, String> deploymentProperties, String propertyName,
 			String defaultValue) {
 		RelaxedNames relaxedNames = new RelaxedNames(propertyName);
 		for (Iterator<String> itr = relaxedNames.iterator(); itr.hasNext();) {

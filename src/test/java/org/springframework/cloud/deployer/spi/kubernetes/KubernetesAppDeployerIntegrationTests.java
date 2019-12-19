@@ -66,6 +66,7 @@ import org.springframework.cloud.deployer.spi.app.AppScaleRequest;
 import org.springframework.cloud.deployer.spi.app.AppStatus;
 import org.springframework.cloud.deployer.spi.core.AppDefinition;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
+import org.springframework.cloud.deployer.spi.kubernetes.support.DeploymentPropertiesResolver;
 import org.springframework.cloud.deployer.spi.test.AbstractAppDeployerIntegrationTests;
 import org.springframework.cloud.deployer.spi.test.Timeout;
 import org.springframework.core.ParameterizedTypeReference;
@@ -600,7 +601,7 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 		List<Container> statefulSetInitContainers = statefulSetSpec.getTemplate().getSpec().getInitContainers();
 		assertEquals(1, statefulSetInitContainers.size());
 		Container statefulSetInitContainer = statefulSetInitContainers.get(0);
-		assertEquals(KubernetesAppDeployer.STATEFUL_SET_IMAGE_NAME, statefulSetInitContainer.getImage());
+		assertEquals(DeploymentPropertiesResolver.STATEFUL_SET_IMAGE_NAME, statefulSetInitContainer.getImage());
 
 		Assertions.assertThat(statefulSetSpec.getPodManagementPolicy()).isEqualTo("Parallel");
 		Assertions.assertThat(statefulSetSpec.getReplicas()).isEqualTo(3);

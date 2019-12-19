@@ -33,6 +33,7 @@ import org.springframework.util.StringUtils;
  * sources along with any custom logic to be applied.
  *
  * @author Chris Schaefer
+ * @author Ilayaperumal Gopinathan
  */
 class KubernetesSchedulerPropertyResolver {
 	private static final NestedCommaDelimitedVariableParser nestedCommaDelimitedVariableParser
@@ -104,6 +105,18 @@ class KubernetesSchedulerPropertyResolver {
 		}
 
 		return kubernetesSchedulerProperties.getImagePullSecret();
+	}
+
+	public static RestartPolicy getRestartPolicy(ScheduleRequest request,
+			KubernetesSchedulerProperties kubernetesSchedulerProperties) {
+		String restartPolicy = request.getSchedulerProperties()
+				.get(KubernetesSchedulerProperties.KUBERNETES_SCHEDULER_PROPERTIES + ".restartPolicy");
+
+		if (StringUtils.hasText(restartPolicy)) {
+			return RestartPolicy.valueOf(restartPolicy);
+		}
+
+		return kubernetesSchedulerProperties.getRestartPolicy();
 	}
 
 	public static String getTaskServiceAccountName(ScheduleRequest request,

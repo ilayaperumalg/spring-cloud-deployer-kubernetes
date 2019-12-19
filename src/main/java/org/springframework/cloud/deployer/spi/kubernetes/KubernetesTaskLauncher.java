@@ -24,34 +24,36 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import io.fabric8.kubernetes.api.model.HasMetadata;
+import io.fabric8.kubernetes.api.model.KubernetesResourceList;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
+import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
+import io.fabric8.kubernetes.api.model.PodSpec;
+import io.fabric8.kubernetes.api.model.PodStatus;
+import io.fabric8.kubernetes.api.model.PodTemplateSpec;
+import io.fabric8.kubernetes.api.model.batch.Job;
 import io.fabric8.kubernetes.api.model.batch.JobList;
+import io.fabric8.kubernetes.api.model.batch.JobSpec;
+import io.fabric8.kubernetes.api.model.batch.JobSpecBuilder;
+import io.fabric8.kubernetes.api.model.batch.JobStatus;
+import io.fabric8.kubernetes.client.KubernetesClient;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.kubernetes.client.Watch;
 import io.fabric8.kubernetes.client.Watcher;
 import io.fabric8.kubernetes.client.dsl.FilterWatchListDeletable;
 import io.fabric8.kubernetes.client.dsl.PodResource;
 import org.hashids.Hashids;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
 import org.springframework.cloud.deployer.spi.core.RuntimeEnvironmentInfo;
+import org.springframework.cloud.deployer.spi.kubernetes.support.DeploymentPropertiesResolver;
+import org.springframework.cloud.deployer.spi.kubernetes.support.PropertyParserUtils;
 import org.springframework.cloud.deployer.spi.task.LaunchState;
 import org.springframework.cloud.deployer.spi.task.TaskLauncher;
 import org.springframework.cloud.deployer.spi.task.TaskStatus;
-
-import io.fabric8.kubernetes.api.model.HasMetadata;
-import io.fabric8.kubernetes.api.model.batch.Job;
-import io.fabric8.kubernetes.api.model.batch.JobSpec;
-import io.fabric8.kubernetes.api.model.batch.JobSpecBuilder;
-import io.fabric8.kubernetes.api.model.batch.JobStatus;
-import io.fabric8.kubernetes.api.model.KubernetesResourceList;
-import io.fabric8.kubernetes.api.model.ObjectMetaBuilder;
-import io.fabric8.kubernetes.api.model.Pod;
-import io.fabric8.kubernetes.api.model.PodSpec;
-import io.fabric8.kubernetes.api.model.PodStatus;
-import io.fabric8.kubernetes.api.model.PodTemplateSpec;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.KubernetesClientException;
 import org.springframework.util.StringUtils;
 
 /**
@@ -76,6 +78,7 @@ public class KubernetesTaskLauncher extends AbstractKubernetesDeployer implement
 		this.properties = properties;
 		this.client = client;
 		this.containerFactory = containerFactory;
+		this.deploymentPropertiesResolver = new DeploymentPropertiesResolver("spring.cloud.deployer.", properties);
 	}
 
 	@Override
@@ -292,11 +295,11 @@ public class KubernetesTaskLauncher extends AbstractKubernetesDeployer implement
 	}
 
 	private Map<String, String> getJobAnnotations(AppDeploymentRequest request) {
-		String annotationsProperty = PropertyParserUtils.getDeploymentPropertyValue(request.getDeploymentProperties(),
+		String annotationsProperty = DeploymentPropertiesResolver.getPropertyValue(request.getDeploymentProperties(),
 				"spring.cloud.deployer.kubernetes.jobAnnotations", "");
 
 		if (StringUtils.isEmpty(annotationsProperty)) {
-			annotationsProperty = properties.getJobAnnotations();
+			annotationsProperty = this.properties.getJobAnnotations();
 		}
 
 		return PropertyParserUtils.getAnnotations(annotationsProperty);
