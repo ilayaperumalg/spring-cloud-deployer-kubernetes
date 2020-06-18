@@ -142,10 +142,10 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 		List<Service> apps = client.services().withLabel(SPRING_APP_KEY, appId).list().getItems();
 		if (apps != null) {
 			for (Service app : apps) {
-				String appIdToDelete = app.getMetadata().getName();
-				logger.debug(String.format("Deleting Resources for: %s", appIdToDelete));
+				String serviceName = app.getMetadata().getName();
+				logger.debug(String.format("Deleting Resources for: %s", serviceName));
 
-				Service svc = client.services().withName(appIdToDelete).get();
+				Service svc = client.services().withName(serviceName).get();
 				try {
 					if (svc != null && "LoadBalancer".equals(svc.getSpec().getType())) {
 						int tries = 0;
@@ -163,7 +163,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 								}
 								catch (InterruptedException e) {
 								}
-								svc = client.services().withName(appIdToDelete).get();
+								svc = client.services().withName(serviceName).get();
 							}
 							else {
 								break;
@@ -173,7 +173,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 							svc.getStatus().getLoadBalancer().getIngress().toString()));
 					}
 
-					deleteAllObjects(appIdToDelete);
+					deleteAllObjects(appId);
 				}
 				catch (RuntimeException e) {
 					logger.error(e.getMessage(), e);
@@ -186,7 +186,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 	@Override
 	public AppStatus status(String appId) {
 		Map<String, String> selector = new HashMap<>();
-		ServiceList services = client.services().withLabel(SPRING_APP_KEY, appId).list();
+		ServiceList services = client.services().withLabel(SPRING_APP_KEY, PropertyParserUtils.getServiceNameFromDeploymentId(appId)).list();
 		selector.put(SPRING_APP_KEY, appId);
 		PodList podList = client.pods().withLabels(selector).list();
 		if (logger.isDebugEnabled()) {
@@ -406,7 +406,7 @@ public class KubernetesAppDeployer extends AbstractKubernetesDeployer implements
 
 		Map<String, String> annotations = this.deploymentPropertiesResolver.getServiceAnnotations(request.getDeploymentProperties());
 
-		client.services().createNew().withNewMetadata().withName(appId)
+		client.services().createNew().withNewMetadata().withName(PropertyParserUtils.getServiceNameFromDeploymentId(appId))
 			.withLabels(idMap).withAnnotations(annotations).addToLabels(SPRING_MARKER_KEY, SPRING_MARKER_VALUE)
 			.endMetadata().withSpec(spec.build()).done();
 	}

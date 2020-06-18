@@ -125,7 +125,7 @@ public class AbstractKubernetesDeployer {
 			for (Pod pod : podList.getItems()) {
 				String deploymentKey = pod.getMetadata().getLabels().get(SPRING_DEPLOYMENT_KEY);
 				for (Service svc : services.getItems()) {
-					if (svc.getMetadata().getName().equals(deploymentKey)) {
+					if (svc.getMetadata().getName().equals(PropertyParserUtils.getServiceNameFromDeploymentId(deploymentKey))) {
 						service = svc;
 						break;
 					}

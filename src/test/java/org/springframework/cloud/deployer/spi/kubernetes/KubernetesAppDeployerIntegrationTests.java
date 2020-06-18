@@ -65,6 +65,7 @@ import org.springframework.cloud.deployer.spi.app.AppScaleRequest;
 import org.springframework.cloud.deployer.spi.app.AppStatus;
 import org.springframework.cloud.deployer.spi.core.AppDefinition;
 import org.springframework.cloud.deployer.spi.core.AppDeploymentRequest;
+import org.springframework.cloud.deployer.spi.kubernetes.support.PropertyParserUtils;
 import org.springframework.cloud.deployer.spi.test.AbstractAppDeployerIntegrationTests;
 import org.springframework.cloud.deployer.spi.test.Timeout;
 import org.springframework.core.ParameterizedTypeReference;
@@ -428,8 +429,9 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 
 		KubernetesDeployerProperties properties = new KubernetesDeployerProperties();
 		boolean success = false;
+		String serviceName = PropertyParserUtils.getServiceNameFromDeploymentId(appId);
 
-		Service svc = kubernetesClient.services().withName(appId).get();
+		Service svc = kubernetesClient.services().withName(serviceName).get();
 
 		if (svc != null && "LoadBalancer".equals(svc.getSpec().getType())) {
 			int tries = 0;
@@ -448,7 +450,7 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 					}
 					catch (InterruptedException e) {
 					}
-					svc = kubernetesClient.services().withName(appId).get();
+					svc = kubernetesClient.services().withName(serviceName).get();
 				}
 			}
 			log.debug(String.format("LoadBalancer Ingress: %s",
@@ -456,7 +458,7 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 		}
 
 		if (!success) {
-			fail("cannot get service information for " + appId);
+			fail("cannot get service information for " + serviceName);
 		}
 
 		String url = String.format("http://%s:%d/actuator/env", ip, port);
@@ -1027,7 +1029,8 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 		log.info("Testing {}...", "DefaultServicePortOverride");
 		KubernetesAppDeployer kubernetesAppDeployer = new KubernetesAppDeployer(new KubernetesDeployerProperties(), kubernetesClient);
 
-		AppDefinition definition = new AppDefinition(randomName(), Collections.singletonMap("server.port", "9090"));
+		String appName = randomName();
+		AppDefinition definition = new AppDefinition(appName + "-v1", Collections.singletonMap("server.port", "9090"));
 		Resource resource = testApplication();
 		AppDeploymentRequest request = new AppDeploymentRequest(definition, resource);
 
@@ -1037,7 +1040,7 @@ public class KubernetesAppDeployerIntegrationTests extends AbstractAppDeployerIn
 		assertThat(deploymentId, eventually(hasStatusThat(
 				Matchers.hasProperty("state", is(deployed))), timeout.maxAttempts, timeout.pause));
 
-		List<ServicePort> servicePorts = kubernetesClient.services().withName(request.getDefinition().getName()).get()
+		List<ServicePort> servicePorts = kubernetesClient.services().withName(appName).get()
 				.getSpec().getPorts();
 
 		assertThat(servicePorts, is(notNullValue()));

@@ -68,4 +68,11 @@ public class PropertyParserUtils {
 		}
 		return defaultValue;
 	}
+
+	public static String getServiceNameFromDeploymentId(String deploymentId) {
+		if (deploymentId.matches("^.*-v[1-9]+")) {
+			return deploymentId.split("-v[1-9]+")[0];
+		}
+		return deploymentId;
+	}
 }
